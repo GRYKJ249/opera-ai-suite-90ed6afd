@@ -1,7 +1,7 @@
 // OperaCloud Storage Engine — streamed ingestion, AES-256-GCM encryption at
 // rest, HTTP Range streaming, per-owner quotas and HMAC pre-signed URLs.
 
-import { b64url, hmacSign, timingSafeEqual } from "./auth";
+import { b64url, fromB64url, hmacSign, timingSafeEqual } from "./auth";
 
 export type StoredFile = {
   id: string;
@@ -18,7 +18,7 @@ export const DEFAULT_QUOTA_BYTES = 1024 * 1024 * 1024; // 1 GB
 
 export class OperaCloud {
   readonly files = new Map<string, StoredFile>();
-  private blobs = new Map<string, Uint8Array>(); // ciphertext at rest
+  private blobs = new Map<string, Uint8Array<ArrayBuffer>>(); // ciphertext at rest
   readonly quotas = new Map<string, number>();
   private keyPromise: Promise<CryptoKey>;
   private log: (level: string, msg: string, meta?: unknown) => void;
@@ -74,7 +74,7 @@ export class OperaCloud {
         chunks.push(value);
       }
     }
-    const plain = new Uint8Array(size);
+    const plain = new Uint8Array(new ArrayBuffer(size));
     let offset = 0;
     for (const c of chunks) {
       plain.set(c, offset);
@@ -82,7 +82,7 @@ export class OperaCloud {
     }
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const key = await this.keyPromise;
-    const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain));
+    const cipher: Uint8Array<ArrayBuffer> = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain));
     const digest = await crypto.subtle.digest("SHA-256", plain);
     const file: StoredFile = {
       id: crypto.randomUUID(),
@@ -100,7 +100,7 @@ export class OperaCloud {
     return file;
   }
 
-  async decrypt(id: string): Promise<Uint8Array | null> {
+  async decrypt(id: string): Promise<Uint8Array<ArrayBuffer> | null> {
     const file = this.files.get(id);
     const cipher = this.blobs.get(id);
     if (!file || !cipher) return null;
