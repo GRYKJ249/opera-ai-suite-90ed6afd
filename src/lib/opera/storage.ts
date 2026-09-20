@@ -105,9 +105,7 @@ export class OperaCloud {
     const cipher = this.blobs.get(id);
     if (!file || !cipher) return null;
     const key = await this.keyPromise;
-    const iv = Uint8Array.from(atob(file.ivB64.replace(/-/g, "+").replace(/_/g, "/")), (c) =>
-      c.charCodeAt(0),
-    );
+    const iv = fromB64url(file.ivB64);
     return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher));
   }
 
